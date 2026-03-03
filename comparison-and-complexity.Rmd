@@ -1,6 +1,6 @@
 ---
 title: "Computational Text Analysis - Exercise 3: Comparison and complexity"
-author: "[your name here]"
+author: "Luca Neuperti"
 date: "25/02/2026"
 output: html_document
 ---
@@ -295,5 +295,149 @@ ggplot(sum_corpus, aes(x=speaker, y=mean)) +
 ## Exercises
 
 1. Compute distance measures such as "euclidean" or "manhattan" for the MP tweets as above, comparing between tweets by MPs and tweets by PM, Theresa May. 
+
+```{r}
+
+#specify different similarity measures to explore
+methods <- c("euclidean", "manhattan")
+
+#create empty dataframe
+testdf_all <- data.frame()
+
+#gen for loop across methods types
+for (i in seq_along(methods)) {
+  
+  #pass method to character string object
+  sim_method <- methods[[i]]
+  
+  #estimate similarity, grouping by username
+  test <- dfmat %>%
+    dfm_group(groups = username) %>%
+    textstat_dist(margin = "documents", method = sim_method) #specify method here as character object created above
+  
+  testm <- as.matrix(test) #convert to a matrix
+  
+  #generate data frame keeping only the row for Theresa May
+  testdf <- as.data.frame(testm[23, c(1:22, 24)])
+  
+  #rename column
+  colnames(testdf) <- "corr_may"
+  
+  #create column variable from rownames
+  testdf <- tibble::rownames_to_column(testdf, "username")
+  
+  #record method in new column variable
+  testdf$method <- sim_method
+
+  #bind all together
+  testdf_all <- rbind(testdf_all, testdf)  
+  
+}
+
+#create variable (for viz only) that is mean of similarity scores for each MP
+testdf_all <- testdf_all %>%
+  group_by(username) %>%
+  mutate(mean_sim = mean(corr_may))
+
+ggplot(testdf_all) +
+  geom_point( aes(x=reorder(username, -mean_sim), y= corr_may, color = method)) + 
+  coord_flip() +
+  xlab("MP username") +
+  ylab("Similarity score") + 
+  theme_minimal()
+
+```
+
 2. Estimate at least three other complexity measures for the EU speeches as above. Consider how the results compare to the Flesch-Kincaid measure used in the article by @schoonvelde_liberals_2019.
+
+```{r}
+speeches$fog <- textstat_readability(speeches$text, measure = "FOG")[,2] #number of 3-syllable words
+speeches$ari <- textstat_readability(speeches$text, measure = "ARI")[,2] #number characters in words
+speeches$drp <- textstat_readability(speeches$text, measure = "DRP")[,2] #degrees of reading power
+
+#get mean and standard deviation of FOG
+sum_corpus_fog <- speeches %>%
+  group_by(speaker) %>%
+  summarise(mean = mean(fog, na.rm=TRUE),
+                   SD=sd(fog, na.rm=TRUE),
+                   N=length(speaker))
+
+#get mean and standard deviation of ARI
+sum_corpus_ari <- speeches %>%
+  group_by(speaker) %>%
+  summarise(mean = mean(ari, na.rm=TRUE),
+                   SD=sd(ari, na.rm=TRUE),
+                   N=length(speaker))
+
+#get mean and standard deviation of DRP
+sum_corpus_drp <- speeches %>%
+  group_by(speaker) %>%
+  summarise(mean = mean(drp, na.rm=TRUE),
+                   SD=sd(drp, na.rm=TRUE),
+                   N=length(speaker))
+
+# calculate standard errors and confidence intervals
+sum_corpus_fog <- speeches %>%
+  group_by(speaker) %>%
+  summarise(
+    mean = mean(fog, na.rm = TRUE),
+    SD   = sd(fog, na.rm = TRUE),
+    N    = n(),
+    se   = SD / sqrt(N),
+    min  = mean - (1.96 * se),
+    max  = mean + (1.96 * se)
+  )
+
+sum_corpus_ari <- speeches %>%
+  group_by(speaker) %>%
+  summarise(
+    mean = mean(ari, na.rm = TRUE),
+    SD   = sd(ari, na.rm = TRUE),
+    N    = n(),
+    se   = SD / sqrt(N),
+    min  = mean - (1.96 * se),
+    max  = mean + (1.96 * se)
+  )
+
+sum_corpus_drp <- speeches %>%
+  group_by(speaker) %>%
+  summarise(
+    mean = mean(drp, na.rm = TRUE),
+    SD   = sd(drp, na.rm = TRUE),
+    N    = n(),
+    se   = SD / sqrt(N),
+    min  = mean - (1.96 * se),
+    max  = mean + (1.96 * se)
+  )
+  
+
+
+ggplot(sum_corpus_fog, aes(x=speaker, y=mean)) +
+  geom_bar(stat="identity") + 
+  geom_errorbar(ymin=sum_corpus_fog$min,ymax=sum_corpus_fog$max, width=.2) +
+  coord_flip() +
+  xlab("") +
+  ylab("Mean Complexity (Fog)") + 
+  theme_minimal() + 
+  ylim(c(0,20))
+
+ggplot(sum_corpus_ari, aes(x=speaker, y=mean)) +
+  geom_bar(stat="identity") + 
+  geom_errorbar(ymin=sum_corpus_ari$min,ymax=sum_corpus_ari$max, width=.2) +
+  coord_flip() +
+  xlab("") +
+  ylab("Mean Complexity (ARI)") + 
+  theme_minimal() + 
+  ylim(c(0,20))
+
+ggplot(sum_corpus_drp, aes(x=speaker, y=mean)) +
+  geom_bar(stat="identity") + 
+  geom_errorbar(ymin=sum_corpus_drp$min,ymax=sum_corpus_drp$max, width=.2) +
+  coord_flip() +
+  xlab("") +
+  ylab("Mean Complexity (DRP)") + 
+  theme_minimal() 
+
+```
+
 3. (Advanced---optional) Estimate similarity scores between the MP tweets and the PM tweets for each week contained in the data. Plot the results. 
